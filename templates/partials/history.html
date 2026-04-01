@@ -1,0 +1,20 @@
+<!--
+  templates/partials/history.html
+  HTMX swap target — rendered by JS from /api/applications/ JSON.
+  This file is also served at GET /partials/history for reference.
+-->
+<table>
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Customer</th>
+      <th>Prediction</th>
+      <th>Probability</th>
+      <th>Model</th>
+      <th>Time</th>
+    </tr>
+  </thead>
+  <tbody id="history-rows">
+    <!-- Rows injected by JS after fetch /api/applications/ -->
+  </tbody>
+</table>

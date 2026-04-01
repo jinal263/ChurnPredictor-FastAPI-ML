@@ -1,0 +1,169 @@
+
+ The Big Picture
+
+Think of what we built like a **restaurant**:
+
+Customer (your browser)  →  Waiter (FastAPI)  →  Kitchen (ML model)  →  Database (stores orders)
+
+- You visit the website and fill in a form
+- FastAPI receives your request and passes it to the ML model
+- The ML model predicts whether a customer will churn
+- The result gets saved to the database and shown back to you
+
+## Now let's walk through every file and what it does
+
+### `run.py` — The On/Off Switch
+This is the **only file you ever run directly**. It just says "start the server on port 8000". Nothing else. Think of it as pressing the power button.
+
+### `app/main.py` — The Front Door
+This is the **brain of the whole app**. It:
+- Starts up the database when the server turns on
+- Registers all the URL routes (`/api/predict`, `/api/train` etc.)
+- Handles errors so they always come back in a clean format
+- Serves the HTML page when you visit `localhost:8000`
+
+### `app/database.py` — The Filing Cabinet
+This sets up the **connection to the database**. We use SQLite which is just a single file on your computer (`cc_underwriting.db`). You can swap it to a proper database like PostgreSQL just by changing one environment variable.
+
+### `app/models.py` — The Filing Cabinet's Folders
+This defines **what shape the data is** inside the database. We have two tables:
+
+- `applications` — every prediction ever made (who, what inputs, what result)
+- `training_runs` — every time you trained a model (which version, how accurate)
+
+Think of it like designing the columns in a spreadsheet before you fill it in.
+
+### `app/schemas.py` — The Booking Form
+Before any data enters the system, Pydantic **validates it**. If someone sends `age: "hello"` instead of `age: 35`, it gets rejected immediately with a clear error message. This protects the ML model from bad data.
+
+It also defines what the **response looks like** — so the API always returns data in a predictable shape.
+
+### `app/errors.py` — The Error Dictionary
+Instead of random error messages, every possible error has a **code and meaning**:
+
+ERR_001 — Missing required field
+ERR_004 — No trained model available
+ERR_008 — Rate limit exceeded
+
+This makes it easy for any app using your API to handle errors programmatically.
+
+### `app/middleware/rate_limit.py` — The Bouncer
+This sits in front of **every API request** and counts how many requests each IP address makes. If someone sends more than 60 requests per minute, they get blocked with a `429 Too Many Requests` error. This protects your server from being overwhelmed.
+
+### `app/ml/` — The Kitchen (3 files)
+
+This is where the actual **machine learning** happens, split into three clean responsibilities:
+
+**`feature_engineering.py`** — The Prep Cook
+Takes raw customer data and transforms it into numbers the model understands. For example:
+- Converts `contract: "Month-to-month"` into `contract_Month-to-month: 1`
+- Creates new columns like `complaint_rate = complaints / tenure`
+- Encodes `education` as a number (High School=0, Bachelor=1, Master=2, PhD=3)
+
+**`train_pipeline.py`** — The Head Chef
+Actually trains the Random Forest model:
+1. Generates 5000 rows of synthetic customer data
+2. Runs feature engineering on it
+3. Uses `RandomizedSearchCV` to try different hyperparameter combinations and find the best one
+4. Saves everything to a versioned folder in `models_store/`
+
+**`predict.py`** — The Waiter
+Loads the saved model from disk and scores a single customer. It caches the model in memory so it doesn't reload from disk on every request.
+
+---
+
+### `app/api/` — The Menu (3 files)
+
+These define the actual **API endpoints** — the URLs you can call:
+
+**`predict.py`** — two endpoints:
+- `POST /api/predict` — send one customer, get back churn prediction
+- `POST /api/predict/batch` — send up to 500 customers at once
+
+**`train.py`** — two endpoints:
+- `POST /api/train/start` — kick off training in the background (doesn't freeze the server)
+- `GET /api/train/{id}` — check if training has finished yet
+
+**`applications.py`** — two endpoints:
+- `GET /api/applications/` — see all past predictions
+- `DELETE /api/applications/{id}` — delete one prediction record
+
+---
+
+### `templates/` — The Restaurant's Look
+
+**`base.html`** — the shared header/nav bar that every page inherits
+
+**`index.html`** — the full dashboard page with the prediction form and history tables
+
+**`partials/result.html`** and **`partials/history.html`** — small HTML fragments that get **swapped in** by HTMX without reloading the whole page
+
+---
+
+### `models_store/` — The Recipe Book
+
+Every time you train a model, a new versioned folder is created:
+```
+models_store/
+  v20240601_120000/
+    model.pkl          ← the trained Random Forest (pickle = frozen Python object)
+    scaler.pkl         ← the StandardScaler (normalises numbers)
+    imputer_stats.pkl  ← median values (fills in missing data)
+    label_encoders.pkl ← how categories were encoded
+    final_features.pkl ← the exact list of 27 features in training order
+    manifest.pkl       ← version info + accuracy metrics
+```
+
+This means you can always go back to an older model version if a new one performs worse.
+
+---
+
+### `cli_train.py` — The Back Door
+Lets you train a model **without starting the web server**. Useful if you just want to quickly retrain from the command line:
+
+```bash
+python cli_train.py --n-samples 10000
+```
+
+---
+
+### `Dockerfile` — The Shipping Container
+Packages the entire app into a container so it runs identically on **any computer or server** in the world — no "works on my machine" problems.
+
+---
+
+## How a prediction actually flows through the code
+
+When you click **Predict** on the website, here's exactly what happens step by step:
+
+```
+1. Browser          →  sends form data to POST /api/predict
+2. rate_limit.py    →  checks you haven't exceeded 60 req/min
+3. schemas.py       →  validates all fields (age, income etc.)
+4. api/predict.py   →  receives the validated data
+5. ml/predict.py    →  loads the model from models_store/
+6. feature_engineering.py → transforms raw inputs into 27 features
+7. model.pkl        →  Random Forest predicts churn probability
+8. api/predict.py   →  saves result to applications table in DB
+9. Browser          →  receives { churn: true, probability: 0.72, risk: "High" }
+10. index.html      →  displays the result card
+```
+
+---
+
+## The key concepts to remember
+
+| Concept | What it means in plain English |
+|---------|-------------------------------|
+| FastAPI | The framework that handles URLs and HTTP requests |
+| SQLAlchemy | The translator between Python and the database |
+| Pydantic | The validator that checks data before it enters the system |
+| Pickle | A way to freeze a trained Python object and save it to disk |
+| HTMX | A tiny library that lets the page update without full reload |
+| Random Forest | An ML model that builds many decision trees and votes on the answer |
+| Feature engineering | Turning raw inputs into numbers a model can understand |
+| Middleware | Code that runs on every request before it reaches your routes |
+
+---
+
+Does any particular part feel confusing? I'm happy to go deeper on any of these — whether it's the ML side, the API side, or the database side. 😊

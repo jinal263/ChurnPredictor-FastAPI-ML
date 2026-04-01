@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CC Underwriting — Churn Prediction</title>
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background:#0f1117; color:#e2e8f0; font-family:'Segoe UI',system-ui,sans-serif; margin:0; }
+  .card { background:#1a1d27; border:1px solid #2a2d3e; border-radius:12px; }
+  nav  { background:#1a1d27; border-bottom:1px solid #2a2d3e; padding:.9rem 2rem; display:flex; align-items:center; gap:1rem; }
+  input,select { background:#0f1117; border:1px solid #2a2d3e; color:#e2e8f0; border-radius:6px; width:100%; padding:.4rem .65rem; font-size:.875rem; outline:none; transition:border-color .2s; }
+  input:focus,select:focus { border-color:#6c63ff; }
+  label { display:block; font-size:.78rem; color:#8892a4; margin-bottom:.2rem; }
+  .fg { margin-bottom:.65rem; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
+  .btn-primary { background:#6c63ff; color:#fff; border-radius:8px; padding:.55rem 1rem; font-weight:600; font-size:.9rem; cursor:pointer; border:none; width:100%; transition:opacity .2s; }
+  .btn-primary:hover,.btn-train:hover { opacity:.85; }
+  .btn-train { background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; border-radius:8px; padding:.55rem 1rem; font-weight:600; font-size:.9rem; cursor:pointer; border:none; width:100%; transition:opacity .2s; }
+  .spinner { border:2px solid #2a2d3e; border-top-color:#6c63ff; border-radius:50%; width:14px; height:14px; animation:spin .8s linear infinite; display:inline-block; vertical-align:middle; margin-left:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  #toast { position:fixed; bottom:1.5rem; right:1.5rem; background:#6c63ff; color:#fff; padding:.6rem 1.2rem; border-radius:8px; font-size:.85rem; display:none; z-index:999; }
+  table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  th { color:#8892a4; font-weight:600; text-align:left; padding:.5rem .75rem; border-bottom:1px solid #2a2d3e; font-size:.75rem; text-transform:uppercase; }
+  td { padding:.5rem .75rem; border-bottom:1px solid rgba(255,255,255,.04); }
+  tr:hover td { background:rgba(255,255,255,.02); }
+  .badge-high   { background:rgba(252,129,129,.2); color:#fc8181; border-radius:12px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+  .badge-medium { background:rgba(246,173,85,.2);  color:#f6ad55; border-radius:12px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+  .badge-low    { background:rgba(72,187,120,.2);  color:#48bb78; border-radius:12px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+  .badge-green  { background:rgba(72,187,120,.2);  color:#48bb78; border-radius:12px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+  .badge-red    { background:rgba(252,129,129,.2); color:#fc8181; border-radius:12px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+  .metric { background:#0f1117; border:1px solid #2a2d3e; border-radius:8px; padding:.6rem; text-align:center; }
+  .metric .val { font-size:1.2rem; font-weight:700; color:#6c63ff; }
+  .metric .lbl { font-size:.7rem; color:#8892a4; margin-top:2px; }
+  .result-churn  { background:rgba(252,129,129,.08); border:1px solid #fc8181; border-radius:10px; padding:1rem; }
+  .result-retain { background:rgba(72,187,120,.08);  border:1px solid #48bb78; border-radius:10px; padding:1rem; }
+  .prob-bar { height:8px; border-radius:4px; background:#2a2d3e; margin:.5rem 0; overflow:hidden; }
+  .prob-fill { height:100%; border-radius:4px; transition:width .6s ease; }
+  .page-btn { padding:.25rem .6rem; background:#2a2d3e; color:#e2e8f0; border:none; border-radius:5px; font-size:.78rem; cursor:pointer; }
+  .page-btn:hover { background:#3a3d4e; }
+  .page-btn:disabled { opacity:.35; cursor:not-allowed; }
+  .page-info { font-size:.78rem; color:#8892a4; }
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <span style="font-weight:700;font-size:1.1rem;">⚡ CC Underwriting</span>
+  <span id="model-badge" style="font-size:.78rem;color:#8892a4;background:#2a2d3e;padding:2px 10px;border-radius:12px;">checking…</span>
+  <span id="health-dot" style="color:#8892a4;margin-left:auto;">●</span>
+  <a href="/docs" style="font-size:.8rem;color:#6c63ff;text-decoration:none;">API Docs</a>
+</nav>
+
+<!-- Layout -->
+<div style="display:grid;grid-template-columns:380px 1fr;gap:1.5rem;padding:1.5rem 2rem;max-width:1400px;margin:0 auto;">
+
+  <!-- LEFT COLUMN -->
+  <div>
+
+    <!-- Predict form -->
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h2 style="font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#8892a4;margin:0 0 1rem;">Predict Churn</h2>
+      <form id="predict-form">
+        <div class="row2">
+          <div class="fg"><label>Customer ID (optional)</label><input name="customer_id" placeholder="CUST_00001"></div>
+          <div class="fg"><label>Age</label><input name="age" type="number" value="35" min="18" max="100"></div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Income (£)</label><input name="income" type="number" value="52000"></div>
+          <div class="fg"><label>Credit Score</label><input name="credit_score" type="number" value="680" min="300" max="850"></div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Tenure (months)</label><input name="tenure_months" type="number" value="18" min="1"></div>
+          <div class="fg"><label>Monthly Charges (£)</label><input name="monthly_charges" type="number" value="65" step="0.01"></div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Num Products</label><input name="num_products" type="number" value="2" min="1" max="20"></div>
+          <div class="fg"><label>Support Calls</label><input name="support_calls" type="number" value="2" min="0"></div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Complaints (6m)</label><input name="complaints_last_6m" type="number" value="0" min="0"></div>
+          <div class="fg"><label>Avg Usage (GB)</label><input name="avg_monthly_usage_gb" type="number" value="20" step="0.1"></div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Payment Delay (days)</label><input name="payment_delay_days" type="number" value="3" min="0"></div>
+          <div class="fg"><label>Gender</label>
+            <select name="gender"><option>Male</option><option>Female</option><option>Other</option></select>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Education</label>
+            <select name="education"><option>High School</option><option selected>Bachelor</option><option>Master</option><option>PhD</option></select>
+          </div>
+          <div class="fg"><label>Marital Status</label>
+            <select name="marital_status"><option>Single</option><option selected>Married</option><option>Divorced</option></select>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Contract</label>
+            <select name="contract"><option>Month-to-month</option><option>One year</option><option>Two year</option></select>
+          </div>
+          <div class="fg"><label>Signup Month / Year</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;">
+              <input name="signup_month" type="number" value="6"    min="1"    max="12"   placeholder="Month">
+              <input name="signup_year"  type="number" value="2022" min="2000" max="2030" placeholder="Year">
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn-primary" onclick="submitPredict()">
+          Predict <span id="pred-spinner" class="spinner" style="display:none"></span>
+        </button>
+      </form>
+      <div id="result-target" style="margin-top:.8rem;"></div>
+    </div>
+
+    <!-- Train form -->
+    <div class="card" style="padding:1.25rem;">
+      <h2 style="font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#8892a4;margin:0 0 1rem;">Train New Model</h2>
+      <div class="row2">
+        <div class="fg"><label>N Estimators</label><input id="tr-n-est" type="number" value="200" min="10" max="2000"></div>
+        <div class="fg"><label>Max Depth</label><input id="tr-depth" type="number" value="12" min="1" max="50"></div>
+      </div>
+      <div class="row2">
+        <div class="fg"><label>Min Samples Split</label><input id="tr-split" type="number" value="10" min="2" max="100"></div>
+        <div class="fg"><label>Min Samples Leaf</label><input id="tr-leaf" type="number" value="5" min="1" max="50"></div>
+      </div>
+      <div class="fg"><label>Training Samples</label><input id="tr-samples" type="number" value="5000" min="500" max="50000"></div>
+      <button class="btn-train" onclick="submitTrain()">
+        🚀 Train Model <span id="train-spinner" class="spinner" style="display:none"></span>
+      </button>
+      <div id="train-result" style="margin-top:.8rem;font-size:.85rem;color:#8892a4;"></div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div>
+
+    <!-- Recent Predictions -->
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#8892a4;margin:0;">Recent Predictions</h2>
+        <button onclick="loadHistory()" style="padding:.3rem .8rem;background:#2a2d3e;color:#e2e8f0;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;">↻ Refresh</button>
+      </div>
+      <div id="history-target">
+        <p style="color:#8892a4;font-size:.85rem;">Loading…</p>
+      </div>
+      <div id="history-pagination" style="display:none;margin-top:.75rem;align-items:center;gap:.5rem;flex-wrap:wrap;">
+        <button class="page-btn" id="prev-btn" onclick="changePage(-1)" disabled>← Prev</button>
+        <span class="page-info" id="page-info">Page 1 of 1</span>
+        <button class="page-btn" id="next-btn" onclick="changePage(1)">Next →</button>
+        <span class="page-info" id="total-info" style="margin-left:auto;"></span>
+      </div>
+    </div>
+
+    <!-- Training Runs -->
+    <div class="card" style="padding:1.25rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 style="font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#8892a4;margin:0;">Training Runs</h2>
+        <button onclick="loadRuns()" style="padding:.3rem .8rem;background:#2a2d3e;color:#e2e8f0;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;">↻ Refresh</button>
+      </div>
+      <div id="runs-target">
+        <p style="color:#8892a4;font-size:.85rem;">Loading…</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '/api';
+
+// current page tracker
+let currentPage = 1;
+const PAGE_SIZE = 10;
+
+async function checkHealth() {
+  try {
+    const r = await fetch('/health');
+    const d = await r.json();
+    const badge = document.getElementById('model-badge');
+    const dot   = document.getElementById('health-dot');
+    if (d.model_ready) {
+      badge.textContent = d.active_model;
+      badge.style.color = '#48bb78';
+      dot.style.color   = '#48bb78';
+    } else {
+      badge.textContent = 'no model — train first';
+      dot.style.color   = '#fc8181';
+    }
+  } catch(e) {
+    document.getElementById('health-dot').style.color = '#fc8181';
+  }
+}
+
+function toast(msg, ok=true) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = ok ? '#6c63ff' : '#e53e3e';
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3000);
+}
+
+async function submitPredict() {
+  const form = document.getElementById('predict-form');
+  const data = {};
+  for (const el of form.querySelectorAll('input,select')) {
+    if (!el.name) continue;
+    const v = el.value.trim();
+    data[el.name] = el.type === 'number' ? (v === '' ? null : Number(v)) : (v || null);
+  }
+  const spinner = document.getElementById('pred-spinner');
+  const target  = document.getElementById('result-target');
+  spinner.style.display = 'inline-block';
+  target.innerHTML = '<p style="color:#8892a4;font-size:.85rem;">Running prediction…</p>';
+  try {
+    const r = await fetch(`${API}/predict`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    const d = await r.json();
+    if (!r.ok) { target.innerHTML = renderError(d); return; }
+    target.innerHTML = renderResult(d);
+    currentPage = 1;
+    loadHistory();
+    toast('Prediction saved ✓');
+  } catch(e) {
+    target.innerHTML = `<p style="color:#fc8181;">Network error: ${e.message}</p>`;
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+function renderResult(d) {
+  const pct   = (d.churn_probability * 100).toFixed(1);
+  const color = d.risk_label === 'High' ? '#fc8181' : d.risk_label === 'Medium' ? '#f6ad55' : '#48bb78';
+  const cls   = d.churn_prediction ? 'result-churn' : 'result-retain';
+  return `<div class="${cls}">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <strong style="font-size:1.05rem;">${d.churn_prediction ? '⚠️ Will Churn' : '✅ Will Retain'}</strong>
+      <span class="badge-${d.risk_label.toLowerCase()}">${d.risk_label} Risk</span>
+    </div>
+    <div class="prob-bar"><div class="prob-fill" style="width:${pct}%;background:${color}"></div></div>
+    <div style="font-size:.9rem;color:${color};font-weight:600;">${pct}% churn probability</div>
+    <div style="font-size:.78rem;color:#8892a4;margin-top:.4rem;">Record #${d.record_id} · Model: ${d.model_version}</div>
+  </div>`;
+}
+
+function renderError(d) {
+  const msg = d.detail || d.message || JSON.stringify(d);
+  return `<div style="background:rgba(252,129,129,.1);border:1px solid #fc8181;border-radius:8px;padding:.8rem;">
+    <strong style="color:#fc8181;">${d.error_code || 'Error'}</strong>: ${msg}
+  </div>`;
+}
+
+async function loadHistory() {
+  try {
+    const r    = await fetch(`${API}/applications/?page=${currentPage}&page_size=${PAGE_SIZE}`);
+    const data = await r.json();
+    const rows = data.items;
+    const el   = document.getElementById('history-target');
+    const pg        = document.getElementById('history-pagination');
+    const pgInfo    = document.getElementById('page-info');
+    const totalInfo = document.getElementById('total-info');
+    const prevBtn   = document.getElementById('prev-btn');
+    const nextBtn   = document.getElementById('next-btn');
+
+    if (!rows || rows.length === 0) {
+      el.innerHTML = '<p style="color:#8892a4;font-size:.85rem;">No predictions yet.</p>';
+      pg.style.display = 'none';
+      return;
+    }
+
+    el.innerHTML = `<table>
+      <tr><th>#</th><th>Customer</th><th>Prediction</th><th>Probability</th><th>Model</th></tr>
+      ${rows.map(row => `<tr>
+        <td>${row.id}</td>
+        <td>${row.customer_id || '—'}</td>
+        <td><span class="badge-${row.churn_prediction ? 'red' : 'green'}">${row.churn_prediction ? 'Churn' : 'Retain'}</span></td>
+        <td>${(row.churn_probability * 100).toFixed(1)}%</td>
+        <td style="color:#8892a4;font-size:.75rem;">${row.model_version}</td>
+      </tr>`).join('')}
+    </table>`;
+
+    pg.style.display   = 'flex';
+    pgInfo.textContent = `Page ${data.page} of ${data.total_pages}`;
+    totalInfo.textContent = `${data.total} total predictions`;
+    prevBtn.disabled   = !data.has_prev;
+    nextBtn.disabled   = !data.has_next;
+
+  } catch(e) { console.error(e); }
+}
+
+function changePage(direction) {
+  currentPage += direction;
+  loadHistory();
+}
+
+async function submitTrain() {
+  const payload = {
+    n_estimators:      parseInt(document.getElementById('tr-n-est').value),
+    max_depth:         parseInt(document.getElementById('tr-depth').value),
+    min_samples_split: parseInt(document.getElementById('tr-split').value),
+    min_samples_leaf:  parseInt(document.getElementById('tr-leaf').value),
+    n_samples:         parseInt(document.getElementById('tr-samples').value),
+  };
+  const spinner = document.getElementById('train-spinner');
+  const res     = document.getElementById('train-result');
+  spinner.style.display = 'inline-block';
+  res.textContent = 'Training started — polling for completion…';
+  try {
+    const r = await fetch(`${API}/train/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if (!r.ok) { res.innerHTML = `<span style="color:#fc8181;">${d.error_code}: ${d.detail}</span>`; return; }
+    await pollTraining(d.model_version, res);
+    checkHealth();
+    loadRuns();
+    toast('Model trained & activated ✓');
+  } catch(e) {
+    res.innerHTML = `<span style="color:#fc8181;">Error: ${e.message}</span>`;
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+async function pollTraining(version, el) {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const r    = await fetch(`${API}/train/`);
+      const runs = await r.json();
+      const run  = runs.find(x => x.model_version === version);
+      if (!run) continue;
+      if (run.status === 'done') {
+        el.innerHTML = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin-top:.5rem;">
+          ${['accuracy','roc_auc','f1_score','oob_score'].map(k => `
+            <div class="metric">
+              <div class="val">${(run[k] || 0).toFixed(3)}</div>
+              <div class="lbl">${k.replace('_',' ')}</div>
+            </div>`).join('')}
+        </div>
+        <div style="color:#8892a4;font-size:.78rem;margin-top:.4rem;">✓ ${run.model_version}</div>`;
+        return run.id;
+      }
+      if (run.status === 'failed') {
+        el.innerHTML = `<span style="color:#fc8181;">Training failed: ${run.error_message}</span>`;
+        return;
+      }
+      el.textContent = `Training… ${attempt * 2}s elapsed`;
+    } catch(e) {}
+  }
+  el.textContent = 'Training taking longer than expected — check /api/train/ manually.';
+}
+
+async function loadRuns() {
+  try {
+    const r    = await fetch(`${API}/train/`);
+    const rows = await r.json();
+    const el   = document.getElementById('runs-target');
+    if (!rows.length) { el.innerHTML = '<p style="color:#8892a4;font-size:.85rem;">No training runs yet.</p>'; return; }
+    el.innerHTML = `<table>
+      <tr><th>Version</th><th>Status</th><th>ROC-AUC</th><th>F1</th><th>Active</th></tr>
+      ${rows.map(r => `<tr>
+        <td style="font-family:monospace;font-size:.75rem;">${r.model_version}</td>
+        <td>${r.status}</td>
+        <td>${r.roc_auc != null ? r.roc_auc.toFixed(3) : '—'}</td>
+        <td>${r.f1_score != null ? r.f1_score.toFixed(3) : '—'}</td>
+        <td>${r.is_active ? '<span class="badge-green">active</span>' : '—'}</td>
+      </tr>`).join('')}
+    </table>`;
+  } catch(e) { console.error(e); }
+}
+
+checkHealth();
+loadHistory();
+loadRuns();
+setInterval(checkHealth, 30000);
+</script>
+</body>
+</html>

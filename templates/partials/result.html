@@ -1,0 +1,16 @@
+<!--
+  templates/partials/result.html
+  HTMX swap target — rendered by JS after a prediction.
+  This file is also served at GET /partials/result for reference.
+-->
+<div class="result-card" id="prediction-result">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <strong class="result-label"><!-- Will Churn / Will Retain --></strong>
+    <span class="risk-badge"><!-- Low / Medium / High Risk --></span>
+  </div>
+  <div class="prob-bar">
+    <div class="prob-fill" style="width:0%;"></div>
+  </div>
+  <div class="prob-text"><!-- e.g. 72.3% churn probability --></div>
+  <div class="result-meta"><!-- Record #42 · Model: v20240601_123456 --></div>
+</div>

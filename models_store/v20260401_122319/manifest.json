@@ -1,0 +1,18 @@
+{
+  "version": "v20260401_122319",
+  "n_samples": 5000,
+  "n_features": 27,
+  "best_params": {
+    "n_estimators": 100,
+    "min_samples_split": 5,
+    "min_samples_leaf": 3,
+    "max_features": "log2",
+    "max_depth": 8,
+    "class_weight": "balanced"
+  },
+  "accuracy": 0.752,
+  "roc_auc": 0.679,
+  "f1_score": 0.3149,
+  "oob_score": 0.7395,
+  "created_at": "2026-04-01T12:23:29.759943"
+}
