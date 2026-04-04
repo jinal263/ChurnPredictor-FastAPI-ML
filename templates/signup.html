@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CC Underwriting — Create Account</title>
+<style>
+* { box-sizing:border-box; margin:0; padding:0; }
+
+body {
+  background:#0a0c14;
+  color:#e2e8f0;
+  font-family:'Segoe UI',system-ui,sans-serif;
+  min-height:100vh;
+  overflow:hidden;
+  display:flex;
+}
+
+#bg-canvas { position:fixed; inset:0; z-index:0; pointer-events:none; }
+
+.split {
+  position:relative; z-index:1;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  width:100vw; min-height:100vh;
+}
+
+/* ── LEFT PANEL ── */
+.left-panel {
+  display:flex; flex-direction:column; justify-content:center; align-items:center;
+  padding:3rem 3.5rem; gap:1.75rem;
+  background:rgba(10,12,20,.55); backdrop-filter:blur(2px);
+  border-right:1px solid rgba(108,99,255,.15);
+}
+.left-panel .panel-title { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; color:#6c63ff; margin-bottom:.2rem; }
+.left-panel .panel-sub   { font-size:1.35rem; font-weight:700; color:#e2e8f0; line-height:1.3; }
+.left-panel .panel-desc  { font-size:.82rem; color:#8892a4; max-width:320px; text-align:center; line-height:1.6; }
+
+.preview-card {
+  background:rgba(26,29,39,.85); border:1px solid #2a2d3e; border-radius:16px;
+  padding:1.5rem 1.75rem; width:100%; max-width:480px;
+  backdrop-filter:blur(8px); box-shadow:0 8px 40px rgba(0,0,0,.5);
+}
+.preview-card h3 { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.07em; color:#8892a4; margin-bottom:1.1rem; }
+.prow  { display:grid; grid-template-columns:1fr 1fr; gap:.65rem; margin-bottom:.65rem; }
+.pfield label { display:block; font-size:.75rem; color:#6c63ff; margin-bottom:.22rem; font-weight:600; }
+.pfield .pval { background:#0f1117; border:1px solid #2a2d3e; border-radius:6px; padding:.42rem .7rem; font-size:.88rem; color:#e2e8f0; }
+
+.result-box { border-radius:12px; padding:1rem 1.2rem; margin-top:.9rem; animation:fadeInUp .5s ease; }
+.result-churn  { background:rgba(252,129,129,.08); border:1px solid #fc8181; }
+.result-retain { background:rgba(72,187,120,.08);  border:1px solid #48bb78; }
+.result-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:.55rem; }
+.result-label  { font-size:1.05rem; font-weight:700; }
+.badge { border-radius:12px; padding:3px 12px; font-size:.78rem; font-weight:700; }
+.badge-high   { background:rgba(252,129,129,.2); color:#fc8181; }
+.badge-medium { background:rgba(246,173,85,.2);  color:#f6ad55; }
+.badge-low    { background:rgba(72,187,120,.2);  color:#48bb78; }
+.prob-bar  { height:8px; background:#2a2d3e; border-radius:4px; overflow:hidden; margin:.4rem 0; }
+.prob-fill { height:100%; border-radius:4px; transition:width .8s ease; }
+.prob-pct  { font-size:.92rem; font-weight:700; }
+.result-meta { font-size:.76rem; color:#8892a4; margin-top:.35rem; }
+
+.access-row { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; width:100%; max-width:480px; }
+.access-pill { background:rgba(26,29,39,.85); border:1px solid #2a2d3e; border-radius:12px; padding:1rem; backdrop-filter:blur(6px); }
+.access-pill .ap-icon { font-size:1.3rem; margin-bottom:.4rem; }
+.access-pill .ap-role { font-size:.78rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; margin-bottom:.25rem; }
+.access-pill .ap-desc { font-size:.75rem; color:#8892a4; line-height:1.4; }
+.ap-viewer  .ap-role { color:#a89fff; }
+.ap-trainer .ap-role { color:#f09060; }
+
+@keyframes fadeInUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+/* ── RIGHT PANEL ── */
+.right-panel {
+  display:flex; align-items:center; justify-content:center;
+  padding:2rem 3.5rem;
+  background:rgba(15,17,23,.88); backdrop-filter:blur(18px);
+  overflow-y:auto;
+}
+
+.signup-card { width:100%; max-width:480px; }
+
+.brand { display:flex; align-items:center; gap:.75rem; margin-bottom:2rem; }
+.brand-icon {
+  background:linear-gradient(135deg,#6c63ff,#764ba2);
+  border-radius:10px; width:42px; height:42px;
+  display:flex; align-items:center; justify-content:center; font-size:1.3rem; flex-shrink:0;
+}
+
+input {
+  background:#0f1117; border:1px solid #2a2d3e; color:#e2e8f0;
+  border-radius:8px; width:100%; padding:.7rem 1rem; font-size:1rem;
+  outline:none; box-sizing:border-box; transition:border-color .2s;
+}
+input:focus { border-color:#6c63ff; box-shadow:0 0 0 3px rgba(108,99,255,.15); }
+input.error { border-color:#fc8181; }
+label { display:block; font-size:.85rem; color:#8892a4; margin-bottom:.4rem; font-weight:500; }
+.fg   { margin-bottom:1.3rem; }
+.hint { font-size:.78rem; color:#8892a4; margin-top:.3rem; }
+
+.btn {
+  background:linear-gradient(135deg,#6c63ff,#764ba2);
+  color:#fff; border-radius:9px; padding:.78rem 1rem;
+  font-weight:600; font-size:1rem; cursor:pointer; border:none; width:100%; transition:opacity .2s;
+}
+.btn:hover  { opacity:.88; }
+.btn:active { opacity:.75; }
+
+#msg { font-size:.83rem; margin-top:.85rem; text-align:center; min-height:1.1rem; }
+.divider { border:none; border-top:1px solid #2a2d3e; margin:1.4rem 0; }
+.link { color:#6c63ff; text-decoration:none; font-size:.85rem; }
+.link:hover { text-decoration:underline; }
+.role-badge {
+  display:inline-block; background:rgba(108,99,255,.15); color:#a89fff;
+  border:1px solid rgba(108,99,255,.3); border-radius:20px; padding:2px 10px; font-size:.75rem; font-weight:600;
+}
+
+@media (max-width:860px) {
+  body { overflow:auto; }
+  .split { grid-template-columns:1fr; }
+  .left-panel { display:none; }
+  .right-panel { min-height:100vh; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<div class="split">
+
+  <!-- LEFT: Preview -->
+  <div class="left-panel">
+    <div style="text-align:center;">
+      <div class="panel-title">AI-Powered Risk Engine</div>
+      <div class="panel-sub">Join the churn prediction<br>platform</div>
+    </div>
+    <p class="panel-desc">
+      Get instant access to real-time credit risk scoring. Sign up as a viewer to start running predictions today.
+    </p>
+
+    <div class="preview-card">
+      <h3>Predict Churn</h3>
+      <div class="prow">
+        <div class="pfield"><label>Age</label><div class="pval">35</div></div>
+        <div class="pfield"><label>Credit Score</label><div class="pval">720</div></div>
+      </div>
+      <div class="prow">
+        <div class="pfield"><label>Tenure (months)</label><div class="pval">36</div></div>
+        <div class="pfield"><label>Monthly Charges</label><div class="pval">£ 49.00</div></div>
+      </div>
+      <div class="prow">
+        <div class="pfield"><label>Support Calls</label><div class="pval">1</div></div>
+        <div class="pfield"><label>Contract</label><div class="pval">One year</div></div>
+      </div>
+      <div class="prow">
+        <div class="pfield"><label>Complaints (6m)</label><div class="pval">0</div></div>
+        <div class="pfield"><label>Num Products</label><div class="pval">3</div></div>
+      </div>
+      <div id="live-result" class="result-box result-retain">
+        <div class="result-header">
+          <span class="result-label" id="res-label">&#9989; Will Retain</span>
+          <span class="badge badge-low" id="res-badge">Low Risk</span>
+        </div>
+        <div class="prob-bar">
+          <div class="prob-fill" id="res-bar" style="width:9%;background:#48bb78;"></div>
+        </div>
+        <div class="prob-pct" id="res-pct" style="color:#48bb78;">9.3% churn probability</div>
+        <div class="result-meta">Record #1043 &middot; Model: rf_v004</div>
+      </div>
+    </div>
+
+    <div class="access-row">
+      <div class="access-pill ap-viewer">
+        <div class="ap-icon">&#128065;</div>
+        <div class="ap-role">Viewer</div>
+        <div class="ap-desc">Run predictions &amp; browse history. Sign up below.</div>
+      </div>
+      <div class="access-pill ap-trainer">
+        <div class="ap-icon">&#128296;</div>
+        <div class="ap-role">Trainer</div>
+        <div class="ap-desc">Train &amp; manage models. Account created by an admin.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: Signup form -->
+  <div class="right-panel">
+    <div class="signup-card">
+
+      <div class="brand">
+        <div class="brand-icon">&#9889;</div>
+        <div>
+          <div style="font-size:1.05rem;font-weight:700;line-height:1.2;">CC Underwriting</div>
+          <div style="font-size:.75rem;color:#8892a4;">Churn Prediction Platform</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:1.4rem;">
+        <div style="font-size:1.1rem;font-weight:700;">Create account</div>
+        <div style="font-size:.82rem;color:#8892a4;margin-top:.2rem;">
+          New accounts are created as <span class="role-badge">viewer</span>
+        </div>
+      </div>
+
+      <div class="fg">
+        <label>Username</label>
+        <input id="username" placeholder="Choose a username" autofocus minlength="3" maxlength="30">
+        <div class="hint">3–30 characters</div>
+      </div>
+      <div class="fg">
+        <label>Password</label>
+        <input id="password" type="password" placeholder="Choose a password" minlength="6">
+        <div class="hint">Minimum 6 characters</div>
+      </div>
+      <div class="fg">
+        <label>Confirm Password</label>
+        <input id="confirm" type="password" placeholder="Repeat your password" onkeydown="if(event.key==='Enter')signup()">
+      </div>
+
+      <button class="btn" onclick="signup()">
+        <span id="btn-text">Create Account</span>
+      </button>
+      <div id="msg"></div>
+
+      <hr class="divider">
+      <div style="text-align:center;font-size:.84rem;color:#8892a4;">
+        Already have an account? <a class="link" href="/login">Sign in</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── Neural Network background ── */
+(function () {
+  const canvas = document.getElementById('bg-canvas');
+  const ctx    = canvas.getContext('2d');
+  let W, H, nodes;
+  const NODE_COUNT = 55, MAX_DIST = 180;
+
+  function resize() { W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+  function initNodes() {
+    nodes = Array.from({ length: NODE_COUNT }, () => ({
+      x: Math.random()*W, y: Math.random()*H,
+      vx: (Math.random()-.5)*.45, vy: (Math.random()-.5)*.45,
+      r: Math.random()*2+1.2, pulse: Math.random()*Math.PI*2,
+    }));
+  }
+  function draw() {
+    ctx.clearRect(0,0,W,H);
+    for (const n of nodes) {
+      n.x+=n.vx; n.y+=n.vy; n.pulse+=.022;
+      if(n.x<0||n.x>W) n.vx*=-1;
+      if(n.y<0||n.y>H) n.vy*=-1;
+    }
+    for (let i=0;i<nodes.length;i++) {
+      for (let j=i+1;j<nodes.length;j++) {
+        const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<MAX_DIST){
+          ctx.beginPath(); ctx.moveTo(nodes[i].x,nodes[i].y); ctx.lineTo(nodes[j].x,nodes[j].y);
+          ctx.strokeStyle=`rgba(108,99,255,${(1-d/MAX_DIST)*.22})`; ctx.lineWidth=.8; ctx.stroke();
+        }
+      }
+    }
+    for (const n of nodes) {
+      const glow=Math.sin(n.pulse)*.5+.5, r=n.r+glow*1.2;
+      const grad=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*3);
+      grad.addColorStop(0,`rgba(108,99,255,${.55+glow*.3})`); grad.addColorStop(1,'rgba(108,99,255,0)');
+      ctx.beginPath(); ctx.arc(n.x,n.y,r*3,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
+      ctx.beginPath(); ctx.arc(n.x,n.y,r,0,Math.PI*2); ctx.fillStyle=`rgba(160,150,255,${.7+glow*.3})`; ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  }
+  window.addEventListener('resize',()=>{resize();initNodes();});
+  resize(); initNodes(); draw();
+})();
+
+/* ── Cycling result animation ── */
+const RESULTS = [
+  { churn:false, pct:9.3,  risk:'Low',    label:'&#9989; Will Retain', color:'#48bb78', cls:'result-retain', badgeCls:'badge-low'    },
+  { churn:true,  pct:74.8, risk:'High',   label:'&#9888;&#65039; Will Churn',  color:'#fc8181', cls:'result-churn',  badgeCls:'badge-high'   },
+  { churn:false, pct:22.1, risk:'Low',    label:'&#9989; Will Retain', color:'#48bb78', cls:'result-retain', badgeCls:'badge-low'    },
+  { churn:true,  pct:57.3, risk:'Medium', label:'&#9888;&#65039; Will Churn',  color:'#f6ad55', cls:'result-churn',  badgeCls:'badge-medium' },
+  { churn:false, pct:6.0,  risk:'Low',    label:'&#9989; Will Retain', color:'#48bb78', cls:'result-retain', badgeCls:'badge-low'    },
+];
+let resultIdx = 0;
+function cycleResult() {
+  resultIdx = (resultIdx + 1) % RESULTS.length;
+  const r   = RESULTS[resultIdx];
+  const box = document.getElementById('live-result');
+  box.style.animation = 'none'; box.offsetHeight; box.style.animation = '';
+  box.className = 'result-box ' + r.cls;
+  document.getElementById('res-label').innerHTML   = r.label;
+  document.getElementById('res-badge').className   = 'badge ' + r.badgeCls;
+  document.getElementById('res-badge').textContent = r.risk + ' Risk';
+  document.getElementById('res-bar').style.width      = r.pct + '%';
+  document.getElementById('res-bar').style.background = r.color;
+  document.getElementById('res-pct').style.color      = r.color;
+  document.getElementById('res-pct').textContent      = r.pct.toFixed(1) + '% churn probability';
+}
+setInterval(cycleResult, 2800);
+
+/* ── Signup logic ── */
+async function signup() {
+  const u   = document.getElementById('username').value.trim();
+  const p   = document.getElementById('password').value;
+  const c   = document.getElementById('confirm').value;
+  const msg = document.getElementById('msg');
+  const btn = document.getElementById('btn-text');
+
+  msg.textContent = '';
+  document.getElementById('confirm').classList.remove('error');
+
+  if (!u || !p || !c) { msg.style.color='#fc8181'; msg.textContent='All fields are required.'; return; }
+  if (u.length < 3)   { msg.style.color='#fc8181'; msg.textContent='Username must be at least 3 characters.'; return; }
+  if (p.length < 6)   { msg.style.color='#fc8181'; msg.textContent='Password must be at least 6 characters.'; return; }
+  if (p !== c) {
+    msg.style.color='#fc8181'; msg.textContent='Passwords do not match.';
+    document.getElementById('confirm').classList.add('error'); return;
+  }
+
+  btn.textContent = 'Creating account…';
+  try {
+    const r = await fetch('/api/auth/signup', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username:u, password:p }),
+    });
+    const data = await r.json();
+    if (r.ok) {
+      msg.style.color = '#48bb78';
+      msg.textContent = 'Account created! Redirecting to sign in…';
+      setTimeout(() => window.location.href = '/login', 1500);
+    } else {
+      msg.style.color = '#fc8181';
+      msg.textContent = data.detail || 'Sign up failed. Try a different username.';
+    }
+  } catch(e) {
+    msg.style.color = '#fc8181';
+    msg.textContent = 'Connection error. Is the server running?';
+  } finally {
+    btn.textContent = 'Create Account';
+  }
+}
+</script>
+</body>
+</html>

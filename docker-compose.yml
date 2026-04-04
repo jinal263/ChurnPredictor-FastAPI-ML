@@ -1,0 +1,23 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - db_data:/app/db
+      - models_data:/app/models_store
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./db/cc_underwriting.db
+      - MODELS_STORE=./models_store
+      - PORT=8000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+volumes:
+  db_data:
+  models_data:

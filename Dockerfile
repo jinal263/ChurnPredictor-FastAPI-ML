@@ -24,11 +24,11 @@ COPY app/          ./app/
 COPY templates/    ./templates/
 COPY run.py        .
 
-# Create model store directory
-RUN mkdir -p models_store
+# Create required directories
+RUN mkdir -p models_store db
 
 # Environment defaults (override with -e DATABASE_URL=... etc.)
-ENV DATABASE_URL=sqlite+aiosqlite:///./cc_underwriting.db \
+ENV DATABASE_URL=sqlite+aiosqlite:///./db/cc_underwriting.db \
     MODELS_STORE=./models_store \
     PORT=8000
 

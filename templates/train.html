@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CC Underwriting — Trainer Dashboard</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background:#0f1117; color:#e2e8f0; font-family:'Segoe UI',system-ui,sans-serif; margin:0; }
+  .card { background:#1a1d27; border:1px solid #2a2d3e; border-radius:12px; }
+  nav  { background:#1a1d27; border-bottom:1px solid #2a2d3e; padding:.8rem 2rem; display:flex; align-items:center; gap:1rem; }
+  nav a.nav-link { color:#8892a4; text-decoration:none; font-size:.85rem; padding:.3rem .7rem; border-radius:6px; transition:background .2s,color .2s; }
+  nav a.nav-link:hover { background:#2a2d3e; color:#e2e8f0; }
+  nav a.nav-link.active { background:#6c63ff22; color:#a89fff; font-weight:600; }
+  input,select { background:#0f1117; border:1px solid #2a2d3e; color:#e2e8f0; border-radius:6px; width:100%; padding:.4rem .65rem; font-size:.875rem; outline:none; transition:border-color .2s; }
+  input:focus,select:focus { border-color:#6c63ff; }
+  label { display:block; font-size:.78rem; color:#8892a4; margin-bottom:.2rem; }
+  .fg { margin-bottom:.65rem; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
+  /* Train button */
+  .btn-train { background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; border-radius:8px; padding:.6rem 1rem; font-weight:600; font-size:.9rem; cursor:pointer; border:none; width:100%; transition:opacity .2s; }
+  .btn-train:hover { opacity:.85; }
+  .btn-train:disabled { opacity:.5; cursor:not-allowed; }
+  /* Predict button */
+  .btn-primary { background:#6c63ff; color:#fff; border-radius:8px; padding:.55rem 1rem; font-weight:600; font-size:.9rem; cursor:pointer; border:none; width:100%; transition:opacity .2s; }
+  .btn-primary:hover { opacity:.85; }
+  /* Create trainer button */
+  .btn-create { background:linear-gradient(135deg,#e05c1a,#c0392b); color:#fff; border-radius:8px; padding:.55rem 1rem; font-weight:600; font-size:.88rem; cursor:pointer; border:none; width:100%; transition:opacity .2s; }
+  .btn-create:hover { opacity:.85; }
+
+  .spinner { border:2px solid #2a2d3e; border-top-color:#6c63ff; border-radius:50%; width:14px; height:14px; animation:spin .8s linear infinite; display:inline-block; vertical-align:middle; margin-left:6px; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  #toast { position:fixed; bottom:1.5rem; right:1.5rem; background:#6c63ff; color:#fff; padding:.6rem 1.2rem; border-radius:8px; font-size:.85rem; display:none; z-index:999; }
+  table { width:100%; border-collapse:collapse; font-size:.82rem; }
+  th { color:#8892a4; font-weight:600; text-align:left; padding:.5rem .75rem; border-bottom:1px solid #2a2d3e; font-size:.75rem; text-transform:uppercase; }
+  td { padding:.5rem .75rem; border-bottom:1px solid rgba(255,255,255,.04); }
+  tr:hover td { background:rgba(255,255,255,.02); }
+  .badge-green  { background:rgba(72,187,120,.2);  color:#48bb78; border-radius:12px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+  .badge-red    { background:rgba(252,129,129,.2); color:#fc8181; border-radius:12px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+  .badge-yellow { background:rgba(246,173,85,.2);  color:#f6ad55; border-radius:12px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+  .badge-high   { background:rgba(252,129,129,.2); color:#fc8181; border-radius:12px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+  .badge-medium { background:rgba(246,173,85,.2);  color:#f6ad55; border-radius:12px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+  .badge-low    { background:rgba(72,187,120,.2);  color:#48bb78; border-radius:12px; padding:2px 10px; font-size:.75rem; font-weight:600; }
+  .badge-role   { background:rgba(108,99,255,.15); color:#a89fff; border:1px solid rgba(108,99,255,.3); border-radius:20px; padding:1px 8px; font-size:.72rem; font-weight:600; }
+  .metric { background:#0f1117; border:1px solid #2a2d3e; border-radius:8px; padding:.75rem; text-align:center; }
+  .metric .val { font-size:1.3rem; font-weight:700; color:#6c63ff; }
+  .metric .lbl { font-size:.7rem; color:#8892a4; margin-top:3px; text-transform:uppercase; letter-spacing:.04em; }
+  .param-hint { font-size:.72rem; color:#8892a4; margin-top:.2rem; }
+  .section-title { font-size:.85rem; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:#8892a4; margin:0 0 1rem; }
+  .prob-bar { height:8px; border-radius:4px; background:#2a2d3e; margin:.5rem 0; overflow:hidden; }
+  .prob-fill { height:100%; border-radius:4px; transition:width .6s ease; }
+  .page-btn { padding:.25rem .6rem; background:#2a2d3e; color:#e2e8f0; border:none; border-radius:5px; font-size:.78rem; cursor:pointer; }
+  .page-btn:hover { background:#3a3d4e; }
+  .page-btn:disabled { opacity:.35; cursor:not-allowed; }
+  .page-info { font-size:.78rem; color:#8892a4; }
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav>
+  <span style="font-weight:700;font-size:1.05rem;letter-spacing:-.01em;">⚡ CC Underwriting</span>
+  <span id="model-badge" style="font-size:.75rem;color:#8892a4;background:#2a2d3e;padding:2px 10px;border-radius:12px;">checking…</span>
+
+  <div style="margin-left:1rem;display:flex;gap:.25rem;">
+    <a class="nav-link" href="/">Predict</a>
+    <a class="nav-link active" href="/train">Trainer Dashboard</a>
+  </div>
+
+  <div style="margin-left:auto;display:flex;align-items:center;gap:.75rem;">
+    <span id="health-dot" style="color:#8892a4;">●</span>
+    <span id="auth-status" style="font-size:.8rem;color:#48bb78;"></span>
+    <span id="role-badge" class="badge-role"></span>
+    <button onclick="logout()" style="padding:.3rem .8rem;background:#2a2d3e;color:#e2e8f0;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;" onmouseover="this.style.background='#3a3d4e'" onmouseout="this.style.background='#2a2d3e'">Sign Out</button>
+    <a href="/docs" style="font-size:.8rem;color:#6c63ff;text-decoration:none;">API Docs</a>
+  </div>
+</nav>
+
+<!-- 3-Column Layout -->
+<div style="display:grid;grid-template-columns:340px 360px 1fr;gap:1.25rem;padding:1.25rem 2rem;max-width:1600px;margin:0 auto;">
+
+  <!-- COL 1: Train controls + Create Trainer -->
+  <div style="display:flex;flex-direction:column;gap:1.25rem;">
+
+    <!-- Train form -->
+    <div class="card" style="padding:1.25rem;">
+      <h2 class="section-title">Train New Model</h2>
+      <div style="background:#0f1117;border:1px solid #2a2d3e;border-radius:8px;padding:.75rem;margin-bottom:1rem;font-size:.8rem;color:#8892a4;line-height:1.5;">
+        Generates synthetic data and fits a Random Forest classifier. Adjust hyperparameters or use defaults.
+      </div>
+
+      <div style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6c63ff;margin-bottom:.6rem;">Hyperparameters</div>
+      <div class="row2">
+        <div class="fg">
+          <label>N Estimators</label>
+          <input id="tr-n-est" type="number" value="200" min="10" max="2000">
+          <div class="param-hint">10–2000</div>
+        </div>
+        <div class="fg">
+          <label>Max Depth</label>
+          <input id="tr-depth" type="number" value="12" min="1" max="50">
+          <div class="param-hint">1–50</div>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="fg">
+          <label>Min Samples Split</label>
+          <input id="tr-split" type="number" value="10" min="2" max="100">
+          <div class="param-hint">2–100</div>
+        </div>
+        <div class="fg">
+          <label>Min Samples Leaf</label>
+          <input id="tr-leaf" type="number" value="5" min="1" max="50">
+          <div class="param-hint">1–50</div>
+        </div>
+      </div>
+
+      <div style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:#6c63ff;margin-bottom:.6rem;">Training Data</div>
+      <div class="fg">
+        <label>Training Samples</label>
+        <input id="tr-samples" type="number" value="5000" min="500" max="50000">
+        <div class="param-hint">500–50 000 synthetic rows</div>
+      </div>
+
+      <button class="btn-train" id="train-btn" onclick="submitTrain()">
+        🚀 Start Training <span id="train-spinner" class="spinner" style="display:none"></span>
+      </button>
+      <div id="train-result" style="margin-top:1rem;font-size:.85rem;color:#8892a4;"></div>
+    </div>
+
+    <!-- Create Trainer Account -->
+    <div class="card" style="padding:1.25rem;">
+      <h2 class="section-title">Create Trainer Account</h2>
+      <div style="background:#0f1117;border:1px solid #2a2d3e;border-radius:8px;padding:.75rem;margin-bottom:1rem;font-size:.8rem;color:#8892a4;line-height:1.5;">
+        Create a new admin account that can train models. Only existing trainers can do this.
+      </div>
+      <div class="fg">
+        <label>Username</label>
+        <input id="new-trainer-username" placeholder="Choose a username" autocomplete="off">
+      </div>
+      <div class="fg">
+        <label>Password</label>
+        <input id="new-trainer-password" type="password" placeholder="Min 6 characters">
+      </div>
+      <div class="fg">
+        <label>Confirm Password</label>
+        <input id="new-trainer-confirm" type="password" placeholder="Repeat the password">
+      </div>
+      <button class="btn-create" onclick="createTrainer()">
+        🔧 Create Trainer Account <span id="create-spinner" class="spinner" style="display:none"></span>
+      </button>
+      <div id="create-msg" style="margin-top:.75rem;font-size:.82rem;text-align:center;min-height:1rem;"></div>
+    </div>
+  </div>
+
+  <!-- COL 2: Predict form -->
+  <div>
+    <div class="card" style="padding:1.25rem;">
+      <h2 class="section-title">Predict Churn</h2>
+      <form id="predict-form">
+        <div class="row2">
+          <div class="fg"><label>Customer ID (optional)</label><input name="customer_id" placeholder="CUST_00001"></div>
+          <div class="fg"><label>Age</label><input name="age" type="number" value="35" min="18" max="100"></div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Income (£)</label><input name="income" type="number" value="52000"></div>
+          <div class="fg"><label>Credit Score</label><input name="credit_score" type="number" value="680" min="300" max="850"></div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Tenure (months)</label><input name="tenure_months" type="number" value="18" min="1"></div>
+          <div class="fg"><label>Monthly Charges (£)</label><input name="monthly_charges" type="number" value="65" step="0.01"></div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Num Products</label><input name="num_products" type="number" value="2" min="1" max="20"></div>
+          <div class="fg"><label>Support Calls</label><input name="support_calls" type="number" value="2" min="0"></div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Complaints (6m)</label><input name="complaints_last_6m" type="number" value="0" min="0"></div>
+          <div class="fg"><label>Avg Usage (GB)</label><input name="avg_monthly_usage_gb" type="number" value="20" step="0.1"></div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Payment Delay (days)</label><input name="payment_delay_days" type="number" value="3" min="0"></div>
+          <div class="fg"><label>Gender</label>
+            <select name="gender"><option>Male</option><option>Female</option><option>Other</option></select>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Education</label>
+            <select name="education"><option>High School</option><option selected>Bachelor</option><option>Master</option><option>PhD</option></select>
+          </div>
+          <div class="fg"><label>Marital Status</label>
+            <select name="marital_status"><option>Single</option><option selected>Married</option><option>Divorced</option></select>
+          </div>
+        </div>
+        <div class="row2">
+          <div class="fg"><label>Contract</label>
+            <select name="contract"><option>Month-to-month</option><option>One year</option><option>Two year</option></select>
+          </div>
+          <div class="fg"><label>Signup Month / Year</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:.4rem;">
+              <input name="signup_month" type="number" value="6"    min="1"    max="12"   placeholder="Month">
+              <input name="signup_year"  type="number" value="2022" min="2000" max="2030" placeholder="Year">
+            </div>
+          </div>
+        </div>
+        <button type="button" class="btn-primary" onclick="submitPredict()">
+          Run Prediction <span id="pred-spinner" class="spinner" style="display:none"></span>
+        </button>
+      </form>
+      <div id="result-target" style="margin-top:.8rem;"></div>
+    </div>
+  </div>
+
+  <!-- COL 3: Training history + Prediction history -->
+  <div style="display:flex;flex-direction:column;gap:1.25rem;">
+
+    <!-- Training history -->
+    <div class="card" style="padding:1.25rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 class="section-title" style="margin:0;">Training History</h2>
+        <button onclick="loadRuns()" style="padding:.3rem .8rem;background:#2a2d3e;color:#e2e8f0;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;">↻ Refresh</button>
+      </div>
+      <div id="runs-target">
+        <p style="color:#8892a4;font-size:.85rem;">Loading…</p>
+      </div>
+    </div>
+
+    <!-- Prediction history -->
+    <div class="card" style="padding:1.25rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h2 class="section-title" style="margin:0;">Prediction History</h2>
+        <button onclick="loadHistory()" style="padding:.3rem .8rem;background:#2a2d3e;color:#e2e8f0;border:none;border-radius:6px;font-size:.8rem;cursor:pointer;">↻ Refresh</button>
+      </div>
+      <div id="history-target">
+        <p style="color:#8892a4;font-size:.85rem;">Loading…</p>
+      </div>
+      <div id="history-pagination" style="display:none;margin-top:.75rem;align-items:center;gap:.5rem;flex-wrap:wrap;">
+        <button class="page-btn" id="prev-btn" onclick="changePage(-1)" disabled>← Prev</button>
+        <span class="page-info" id="page-info">Page 1 of 1</span>
+        <button class="page-btn" id="next-btn" onclick="changePage(1)">Next →</button>
+        <span class="page-info" id="total-info" style="margin-left:auto;"></span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = '/api';
+let currentPage = 1;
+const PAGE_SIZE = 10;
+
+// ── Auth ──────────────────────────────────────────────────────────
+const _authHeader = sessionStorage.getItem('auth');
+const _username   = sessionStorage.getItem('username');
+const _role       = sessionStorage.getItem('role');
+
+if (!_authHeader)      { window.location.href = '/login'; }
+if (_role !== 'admin') { window.location.href = '/'; }
+
+if (_username) document.getElementById('auth-status').textContent = _username;
+if (_role)     document.getElementById('role-badge').textContent  = _role;
+
+function logout() { sessionStorage.clear(); window.location.href = '/login'; }
+
+function authHeaders(extra) {
+  return Object.assign({ 'Content-Type': 'application/json', 'Authorization': _authHeader }, extra || {});
+}
+
+// ── Health ────────────────────────────────────────────────────────
+async function checkHealth() {
+  try {
+    const r = await fetch('/health');
+    const d = await r.json();
+    const badge = document.getElementById('model-badge');
+    const dot   = document.getElementById('health-dot');
+    if (d.model_ready) {
+      badge.textContent = '✓ ' + d.active_model;
+      badge.style.color = '#48bb78';
+      dot.style.color   = '#48bb78';
+    } else {
+      badge.textContent = 'no model trained yet';
+      dot.style.color   = '#fc8181';
+    }
+  } catch(e) { document.getElementById('health-dot').style.color = '#fc8181'; }
+}
+
+function toast(msg, ok=true) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = ok ? '#6c63ff' : '#e53e3e';
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3500);
+}
+
+// ── Train ─────────────────────────────────────────────────────────
+async function submitTrain() {
+  const payload = {
+    n_estimators:      parseInt(document.getElementById('tr-n-est').value),
+    max_depth:         parseInt(document.getElementById('tr-depth').value),
+    min_samples_split: parseInt(document.getElementById('tr-split').value),
+    min_samples_leaf:  parseInt(document.getElementById('tr-leaf').value),
+    n_samples:         parseInt(document.getElementById('tr-samples').value),
+  };
+  const spinner = document.getElementById('train-spinner');
+  const btn     = document.getElementById('train-btn');
+  const res     = document.getElementById('train-result');
+  spinner.style.display = 'inline-block';
+  btn.disabled = true;
+  res.innerHTML = '<span style="color:#8892a4;">Training started — this may take 30–120 seconds…</span>';
+  try {
+    const r = await fetch(`${API}/train/start`, {
+      method: 'POST', headers: authHeaders(), body: JSON.stringify(payload)
+    });
+    if (r.status === 401) { sessionStorage.clear(); window.location.href = '/login'; return; }
+    if (r.status === 403) { window.location.href = '/'; return; }
+    const d = await r.json();
+    if (!r.ok) { res.innerHTML = `<span style="color:#fc8181;">${d.error_code||'Error'}: ${d.detail||d.message}</span>`; return; }
+    loadRuns();
+    await pollTraining(d.model_version, res);
+    checkHealth();
+    loadRuns();
+    toast('Model trained & activated ✓');
+  } catch(e) {
+    res.innerHTML = `<span style="color:#fc8181;">Error: ${e.message}</span>`;
+  } finally {
+    spinner.style.display = 'none';
+    btn.disabled = false;
+  }
+}
+
+async function pollTraining(version, el) {
+  for (let attempt = 0; attempt < 90; attempt++) {
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      const r    = await fetch(`${API}/train/`, { headers: authHeaders() });
+      const runs = await r.json();
+      const run  = runs.find(x => x.model_version === version);
+      if (!run) continue;
+      if (run.status === 'done') {
+        el.innerHTML = `
+          <div style="margin-bottom:.6rem;font-size:.82rem;color:#48bb78;font-weight:600;">✓ Training complete — ${run.model_version}</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;">
+            ${['accuracy','roc_auc','f1_score','oob_score'].map(k => `
+              <div class="metric"><div class="val">${(run[k]||0).toFixed(3)}</div><div class="lbl">${k.replace(/_/g,' ')}</div></div>`).join('')}
+          </div>`;
+        return;
+      }
+      if (run.status === 'failed') { el.innerHTML = `<span style="color:#fc8181;">Training failed: ${run.error_message}</span>`; return; }
+      el.innerHTML = `<span style="color:#8892a4;">Training in progress… ${attempt * 2}s elapsed</span>`;
+    } catch(e) {}
+  }
+  el.innerHTML = `<span style="color:#f6ad55;">Taking longer than expected. Check history or refresh.</span>`;
+}
+
+// ── Training runs table ───────────────────────────────────────────
+async function loadRuns() {
+  try {
+    const r = await fetch(`${API}/train/`, { headers: authHeaders() });
+    if (r.status === 401) { sessionStorage.clear(); window.location.href = '/login'; return; }
+    if (r.status === 403) { window.location.href = '/'; return; }
+    const rows = await r.json();
+    const el   = document.getElementById('runs-target');
+    if (!rows.length) { el.innerHTML = '<p style="color:#8892a4;font-size:.85rem;">No training runs yet.</p>'; return; }
+    el.innerHTML = `<table>
+      <tr><th>Version</th><th>Status</th><th>Samples</th><th>Accuracy</th><th>ROC-AUC</th><th>F1</th><th>OOB</th><th>Active</th></tr>
+      ${rows.map(r => `<tr>
+        <td style="font-family:monospace;font-size:.75rem;color:#8892a4;">${r.model_version}</td>
+        <td>
+          ${r.status==='done'    ? '<span class="badge-green">done</span>'    : ''}
+          ${r.status==='running' ? '<span class="badge-yellow">running</span>' : ''}
+          ${r.status==='failed'  ? '<span class="badge-red">failed</span>'    : ''}
+        </td>
+        <td style="color:#8892a4;">${r.n_samples!=null ? r.n_samples.toLocaleString() : '—'}</td>
+        <td style="font-weight:600;">${r.accuracy !=null ? (r.accuracy*100).toFixed(1)+'%' : '—'}</td>
+        <td style="font-weight:600;">${r.roc_auc  !=null ? r.roc_auc.toFixed(3)   : '—'}</td>
+        <td style="font-weight:600;">${r.f1_score !=null ? r.f1_score.toFixed(3)  : '—'}</td>
+        <td style="font-weight:600;">${r.oob_score!=null ? r.oob_score.toFixed(3) : '—'}</td>
+        <td>${r.is_active ? '<span class="badge-green">active</span>' : '—'}</td>
+      </tr>`).join('')}
+    </table>`;
+  } catch(e) { console.error(e); }
+}
+
+// ── Predict ───────────────────────────────────────────────────────
+async function submitPredict() {
+  const form = document.getElementById('predict-form');
+  const data = {};
+  for (const el of form.querySelectorAll('input,select')) {
+    if (!el.name) continue;
+    const v = el.value.trim();
+    data[el.name] = el.type === 'number' ? (v === '' ? null : Number(v)) : (v || null);
+  }
+  const spinner = document.getElementById('pred-spinner');
+  const target  = document.getElementById('result-target');
+  spinner.style.display = 'inline-block';
+  target.innerHTML = '<p style="color:#8892a4;font-size:.85rem;">Running prediction…</p>';
+  try {
+    const r = await fetch(`${API}/predict`, {
+      method: 'POST', headers: authHeaders(), body: JSON.stringify(data)
+    });
+    if (r.status === 401) { sessionStorage.clear(); window.location.href = '/login'; return; }
+    const d = await r.json();
+    if (!r.ok) { target.innerHTML = renderError(d); return; }
+    target.innerHTML = renderResult(d);
+    currentPage = 1;
+    loadHistory();
+    toast('Prediction saved ✓');
+  } catch(e) {
+    target.innerHTML = `<p style="color:#fc8181;">Network error: ${e.message}</p>`;
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+function renderResult(d) {
+  const pct    = (d.churn_probability * 100).toFixed(1);
+  const color  = d.risk_label === 'High' ? '#fc8181' : d.risk_label === 'Medium' ? '#f6ad55' : '#48bb78';
+  const bg     = d.churn_prediction ? 'rgba(252,129,129,.08)' : 'rgba(72,187,120,.08)';
+  const border = d.churn_prediction ? '#fc8181' : '#48bb78';
+  return `<div style="background:${bg};border:1px solid ${border};border-radius:10px;padding:1rem;margin-top:.5rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem;">
+      <strong style="font-size:1.05rem;">${d.churn_prediction ? '⚠️ Will Churn' : '✅ Will Retain'}</strong>
+      <span class="badge-${d.risk_label.toLowerCase()}">${d.risk_label} Risk</span>
+    </div>
+    <div class="prob-bar"><div class="prob-fill" style="width:${pct}%;background:${color}"></div></div>
+    <div style="font-size:.9rem;color:${color};font-weight:600;margin-top:.3rem;">${pct}% churn probability</div>
+    <div style="font-size:.78rem;color:#8892a4;margin-top:.4rem;">Record #${d.record_id} · Model: ${d.model_version}</div>
+  </div>`;
+}
+
+function renderError(d) {
+  const msg = d.detail || d.message || JSON.stringify(d);
+  return `<div style="background:rgba(252,129,129,.1);border:1px solid #fc8181;border-radius:8px;padding:.8rem;">
+    <strong style="color:#fc8181;">${d.error_code || 'Error'}</strong>: ${msg}
+  </div>`;
+}
+
+// ── Prediction history ────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const r    = await fetch(`${API}/applications/?page=${currentPage}&page_size=${PAGE_SIZE}`, { headers: authHeaders() });
+    if (r.status === 401) { sessionStorage.clear(); window.location.href = '/login'; return; }
+    const data = await r.json();
+    const rows = data.items;
+    const el   = document.getElementById('history-target');
+    const pg   = document.getElementById('history-pagination');
+    if (!rows || rows.length === 0) {
+      el.innerHTML = '<p style="color:#8892a4;font-size:.85rem;">No predictions yet.</p>';
+      pg.style.display = 'none'; return;
+    }
+    el.innerHTML = `<table>
+      <tr><th>#</th><th>Customer</th><th>Result</th><th>Probability</th><th>Risk</th><th>Model</th></tr>
+      ${rows.map(row => `<tr>
+        <td style="color:#8892a4;">${row.id}</td>
+        <td>${row.customer_id || '—'}</td>
+        <td><span class="badge-${row.churn_prediction ? 'red' : 'green'}">${row.churn_prediction ? 'Churn' : 'Retain'}</span></td>
+        <td style="font-weight:600;">${(row.churn_probability*100).toFixed(1)}%</td>
+        <td><span class="badge-${(row.risk_label||'').toLowerCase()}">${row.risk_label||'—'}</span></td>
+        <td style="color:#8892a4;font-size:.75rem;font-family:monospace;">${row.model_version}</td>
+      </tr>`).join('')}
+    </table>`;
+    pg.style.display = 'flex';
+    document.getElementById('page-info').textContent  = `Page ${data.page} of ${data.total_pages}`;
+    document.getElementById('total-info').textContent = `${data.total} total`;
+    document.getElementById('prev-btn').disabled = !data.has_prev;
+    document.getElementById('next-btn').disabled = !data.has_next;
+  } catch(e) { console.error(e); }
+}
+
+function changePage(dir) { currentPage += dir; loadHistory(); }
+
+// ── Create Trainer Account ────────────────────────────────────────
+async function createTrainer() {
+  const u   = document.getElementById('new-trainer-username').value.trim();
+  const p   = document.getElementById('new-trainer-password').value;
+  const c   = document.getElementById('new-trainer-confirm').value;
+  const msg = document.getElementById('create-msg');
+  const spinner = document.getElementById('create-spinner');
+  msg.textContent = '';
+  if (!u || !p || !c) { msg.style.color='#fc8181'; msg.textContent='All fields are required.'; return; }
+  if (u.length < 3)   { msg.style.color='#fc8181'; msg.textContent='Username must be at least 3 characters.'; return; }
+  if (p.length < 6)   { msg.style.color='#fc8181'; msg.textContent='Password must be at least 6 characters.'; return; }
+  if (p !== c)        { msg.style.color='#fc8181'; msg.textContent='Passwords do not match.'; return; }
+  spinner.style.display = 'inline-block';
+  try {
+    const r = await fetch(`${API}/auth/signup/admin`, {
+      method: 'POST', headers: authHeaders(),
+      body: JSON.stringify({ username: u, password: p }),
+    });
+    if (r.status === 401) { sessionStorage.clear(); window.location.href = '/login'; return; }
+    if (r.status === 403) { msg.style.color='#fc8181'; msg.textContent='Admin privileges required.'; return; }
+    const data = await r.json();
+    if (r.ok) {
+      msg.style.color = '#48bb78';
+      msg.textContent = `Trainer "${data.username}" created successfully.`;
+      document.getElementById('new-trainer-username').value = '';
+      document.getElementById('new-trainer-password').value = '';
+      document.getElementById('new-trainer-confirm').value  = '';
+      toast('Trainer account created ✓');
+    } else {
+      msg.style.color = '#fc8181';
+      msg.textContent = data.detail || 'Failed to create account.';
+    }
+  } catch(e) {
+    msg.style.color = '#fc8181'; msg.textContent = 'Connection error.';
+  } finally {
+    spinner.style.display = 'none';
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+checkHealth();
+loadRuns();
+loadHistory();
+setInterval(checkHealth, 30000);
+</script>
+</body>
+</html>

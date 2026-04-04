@@ -1,0 +1,30 @@
+﻿# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment / secrets
+.env
+.env.*
+
+# Git & IDE
+.git/
+.gitignore
+.claude/
+
+# Virtual environment
+cc/
+
+# Don't bake the live database into the image
+cc_underwriting.db
+
+# Don't bake trained models into the image
+models_store/
+
+# Docs
+*.md
+
+# Docker files themselves
+Dockerfile
+docker-compose.yml

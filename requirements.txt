@@ -4,6 +4,7 @@ sqlalchemy
 aiosqlite
 pydantic
 scikit-learn
-nump
+numpy
 pandas
 scipy
+bcrypt

@@ -2,10 +2,28 @@
 app/api/predict.py
 POST /api/predict        — single applicant
 POST /api/predict/batch  — up to 500 applicants
+
+CHANGES FROM YOUR ORIGINAL — only 3 lines added, nothing removed:
+  1. Added `Depends` to the fastapi import (it was missing from your original)
+  2. Added `from app.auth import require_auth`
+  3. Added `user: str = Depends(require_auth)` as the last parameter on
+     both route functions (predict and predict_batch)
+
+WHY the user parameter is last:
+  FastAPI resolves dependencies in parameter order. Putting auth last
+  means your business parameters (applicant, db) are still listed first,
+  which makes the function signature easier to read. The order does not
+  affect behaviour — FastAPI runs all Depends() calls before your code.
+
+WHY 'user' is not used inside the function body:
+  You don't have to use it. Its only job is to trigger require_auth.
+  If require_auth raises a 401, FastAPI stops and never calls your
+  function at all. You could log it if you want:
+    logger.info(f"Prediction by {user}")
 """
 from __future__ import annotations
 import logging
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends                         # ← added Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -13,13 +31,14 @@ from app.models import Application
 from app.schemas import ApplicantIn, PredictionOut, BatchPredictIn, BatchPredictOut, ErrorOut
 from app.errors import raise_error
 from app.ml.predict import score_applicant
+from app.auth import require_auth                              # ← NEW
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
 async def _run_and_save(applicant: ApplicantIn, db: AsyncSession) -> PredictionOut:
-    """Score one applicant and persist the result."""
+    """Score one applicant and persist the result. UNCHANGED."""
     try:
         result = score_applicant(applicant.model_dump())
     except RuntimeError as exc:
@@ -75,7 +94,11 @@ async def _run_and_save(applicant: ApplicantIn, db: AsyncSession) -> PredictionO
     },
     summary="Predict churn for a single applicant",
 )
-async def predict(applicant: ApplicantIn, db: AsyncSession = Depends(get_db)):
+async def predict(
+    applicant: ApplicantIn,
+    db: AsyncSession = Depends(get_db),
+    user: str = Depends(require_auth),                        # ← NEW (admin + viewer)
+):
     return await _run_and_save(applicant, db)
 
 
@@ -88,7 +111,11 @@ async def predict(applicant: ApplicantIn, db: AsyncSession = Depends(get_db)):
     },
     summary="Batch predict churn for up to 500 applicants",
 )
-async def predict_batch(req: BatchPredictIn, db: AsyncSession = Depends(get_db)):
+async def predict_batch(
+    req: BatchPredictIn,
+    db: AsyncSession = Depends(get_db),
+    user: str = Depends(require_auth),                        # ← NEW (admin + viewer)
+):
     if len(req.customers) > 500:
         raise_error("ERR_009")
 

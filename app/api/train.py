@@ -1,8 +1,21 @@
 """
 app/api/train.py
 POST /api/train/start   — kick off background training
-GET  /api/train/{id}    — poll status of a training run
 GET  /api/train/        — list all runs
+GET  /api/train/{id}    — poll status of a training run
+
+CHANGE FROM YOUR PREVIOUS VERSION:
+  Moved GET /api/train/ to be defined BEFORE GET /api/train/{run_id}.
+
+  WHY this matters:
+    FastAPI matches routes in the order they are defined. The route
+    GET /api/train/{run_id} uses a path parameter — it matches ANY
+    string after /train/, including the empty string from /train/.
+    So if {run_id} is defined first, /train/ is swallowed by it and
+    the list endpoint is never reached, causing a 404.
+
+    Rule to remember: always put exact/static routes BEFORE
+    parameterised routes in the same router.
 """
 from __future__ import annotations
 import asyncio
@@ -18,17 +31,17 @@ from app.schemas import TrainIn, TrainStartOut, TrainStatusOut, ErrorOut
 from app.errors import raise_error
 from app.ml.train_pipeline import run_training
 from app.ml.predict import invalidate_cache
+from app.auth import require_admin
 
 router  = APIRouter()
 logger  = logging.getLogger(__name__)
 
 
 async def _background_train(run_id: int, params: TrainIn) -> None:
-    """Run training in background and update DB record when done."""
+    """Run training in background and update DB record when done. UNCHANGED."""
     from app.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
         try:
-            # Run in a thread so it doesn't block the event loop
             loop = asyncio.get_event_loop()
             meta = await loop.run_in_executor(
                 None,
@@ -41,7 +54,6 @@ async def _background_train(run_id: int, params: TrainIn) -> None:
                 )
             )
 
-            # Deactivate all other runs
             await db.execute(update(TrainingRun).values(is_active=False))
 
             await db.execute(
@@ -76,52 +88,58 @@ async def _background_train(run_id: int, params: TrainIn) -> None:
 @router.post(
     "/train/start",
     response_model=TrainStartOut,
-    responses={500: {"model": ErrorOut}},
-    summary="Start a new training run (runs in background)",
+    responses={500: {"model": ErrorOut}, 401: {"model": ErrorOut}, 403: {"model": ErrorOut}},
+    summary="Start a new training run — admin only",
 )
 async def start_training(
     params: TrainIn,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
+    user: str = Depends(require_admin),
 ):
-    from datetime import datetime
     version = datetime.utcnow().strftime("v%Y%m%d_%H%M%S")
-
     run = TrainingRun(model_version=version, status="running")
     db.add(run)
     await db.commit()
     await db.refresh(run)
-
     background_tasks.add_task(_background_train, run.id, params)
-
     return TrainStartOut(
         model_version=version,
         status="running",
-        message=f"Training started. Poll GET /api/train/{run.id} for status.",
+        message=f"Training started by {user}. Poll GET /api/train/{run.id} for status.",
     )
 
 
+# ── LIST must come BEFORE /{run_id} ──────────────────────────────
+@router.get(
+    "/train/",
+    response_model=list[TrainStatusOut],
+    summary="List all training runs — admin only",
+)
+async def list_training_runs(
+    db: AsyncSession = Depends(get_db),
+    user: str = Depends(require_admin),
+):
+    result = await db.execute(
+        select(TrainingRun).order_by(TrainingRun.created_at.desc()).limit(20)
+    )
+    return result.scalars().all()
+
+
+# ── /{run_id} must come AFTER the static /train/ route ───────────
 @router.get(
     "/train/{run_id}",
     response_model=TrainStatusOut,
-    responses={404: {"model": ErrorOut}},
-    summary="Get status of a training run by ID",
+    responses={404: {"model": ErrorOut}, 401: {"model": ErrorOut}, 403: {"model": ErrorOut}},
+    summary="Get status of a training run — admin only",
 )
-async def get_training_status(run_id: int, db: AsyncSession = Depends(get_db)):
+async def get_training_status(
+    run_id: int,
+    db: AsyncSession = Depends(get_db),
+    user: str = Depends(require_admin),
+):
     result = await db.execute(select(TrainingRun).where(TrainingRun.id == run_id))
     run    = result.scalar_one_or_none()
     if run is None:
         raise_error("ERR_007", f"Training run {run_id} not found")
     return run
-
-
-@router.get(
-    "/train/",
-    response_model=list[TrainStatusOut],
-    summary="List all training runs (latest first)",
-)
-async def list_training_runs(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(TrainingRun).order_by(TrainingRun.created_at.desc()).limit(20)
-    )
-    return result.scalars().all()

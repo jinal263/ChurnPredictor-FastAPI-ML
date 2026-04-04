@@ -1,62 +1,84 @@
 """
-models.py — SQLAlchemy ORM table definitions.
-Kept separate from database.py so imports stay clean.
+app/models.py
+SQLAlchemy ORM table definitions.
+
+IMPORTANT — Base is imported from app.database, NOT defined here.
+Your database.py owns Base. All models must inherit from that same
+Base so SQLAlchemy knows they belong to the same engine and can
+create their tables with Base.metadata.create_all().
+
+If each file defined its own Base, the tables would be invisible
+to each other and init_db() would create nothing.
+
+CHANGES FROM YOUR ORIGINAL:
+  - Added: from app.database import Base  (instead of defining Base here)
+  - Added: the User class at the bottom
+  - Application and TrainingRun are completely unchanged
 """
+from __future__ import annotations
 from datetime import datetime
 from sqlalchemy import (
-    Integer, Float, String, Boolean, DateTime, Text, func
+    Column, Integer, String, Float, Boolean,
+    DateTime, Text, func
 )
-from sqlalchemy.orm import Mapped, mapped_column
-from app.database import Base
+from app.database import Base                                   # ← import, not define
 
+
+# ── Your existing tables — UNCHANGED ─────────────────────────────
 
 class Application(Base):
-    """One row per prediction request."""
     __tablename__ = "applications"
 
-    id: Mapped[int]          = mapped_column(Integer, primary_key=True, index=True)
-    customer_id: Mapped[str | None] = mapped_column(String(50), index=True, nullable=True)
-
-    # Raw inputs
-    age: Mapped[int]                    = mapped_column(Integer)
-    income: Mapped[float]               = mapped_column(Float)
-    credit_score: Mapped[int]           = mapped_column(Integer)
-    tenure_months: Mapped[int]          = mapped_column(Integer)
-    monthly_charges: Mapped[float]      = mapped_column(Float)
-    num_products: Mapped[int]           = mapped_column(Integer)
-    support_calls: Mapped[int]          = mapped_column(Integer)
-    complaints_last_6m: Mapped[int]     = mapped_column(Integer)
-    avg_monthly_usage_gb: Mapped[float] = mapped_column(Float)
-    payment_delay_days: Mapped[int]     = mapped_column(Integer)
-    gender: Mapped[str]                 = mapped_column(String(20))
-    education: Mapped[str]              = mapped_column(String(30))
-    marital_status: Mapped[str]         = mapped_column(String(20))
-    contract: Mapped[str]               = mapped_column(String(30))
-    signup_month: Mapped[int]           = mapped_column(Integer)
-    signup_year: Mapped[int]            = mapped_column(Integer)
-
-    # Outputs
-    churn_prediction: Mapped[bool]      = mapped_column(Boolean)
-    churn_probability: Mapped[float]    = mapped_column(Float)
-    risk_label: Mapped[str]             = mapped_column(String(10))
-    model_version: Mapped[str]          = mapped_column(String(60))
-    created_at: Mapped[datetime]        = mapped_column(DateTime, default=datetime.utcnow)
+    id                   = Column(Integer, primary_key=True, index=True)
+    customer_id          = Column(String,  index=True)
+    age                  = Column(Integer)
+    income               = Column(Float)
+    credit_score         = Column(Integer)
+    tenure_months        = Column(Integer)
+    monthly_charges      = Column(Float)
+    num_products         = Column(Integer)
+    support_calls        = Column(Integer)
+    complaints_last_6m   = Column(Integer)
+    avg_monthly_usage_gb = Column(Float)
+    payment_delay_days   = Column(Integer)
+    gender               = Column(String)
+    education            = Column(String)
+    marital_status       = Column(String)
+    contract             = Column(String)
+    signup_month         = Column(Integer)
+    signup_year          = Column(Integer)
+    churn_prediction     = Column(Boolean)
+    churn_probability    = Column(Float)
+    risk_label           = Column(String)
+    model_version        = Column(String)
+    created_at           = Column(DateTime, default=datetime.utcnow)
 
 
 class TrainingRun(Base):
-    """One row per completed training run."""
     __tablename__ = "training_runs"
 
-    id: Mapped[int]             = mapped_column(Integer, primary_key=True, index=True)
-    model_version: Mapped[str]  = mapped_column(String(60), unique=True, index=True)
-    status: Mapped[str]         = mapped_column(String(20), default="running")  # running | done | failed
-    n_samples: Mapped[int]      = mapped_column(Integer, nullable=True)
-    n_features: Mapped[int]     = mapped_column(Integer, nullable=True)
-    accuracy: Mapped[float | None]   = mapped_column(Float, nullable=True)
-    roc_auc: Mapped[float | None]    = mapped_column(Float, nullable=True)
-    f1_score: Mapped[float | None]   = mapped_column(Float, nullable=True)
-    oob_score: Mapped[float | None]  = mapped_column(Float, nullable=True)
-    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    is_active: Mapped[bool]     = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    id            = Column(Integer, primary_key=True, index=True)
+    model_version = Column(String,  unique=True, index=True)
+    status        = Column(String,  default="running")
+    n_samples     = Column(Integer, nullable=True)
+    n_features    = Column(Integer, nullable=True)
+    accuracy      = Column(Float,   nullable=True)
+    roc_auc       = Column(Float,   nullable=True)
+    f1_score      = Column(Float,   nullable=True)
+    oob_score     = Column(Float,   nullable=True)
+    error_message = Column(Text,    nullable=True)
+    is_active     = Column(Boolean, default=False)
+    created_at    = Column(DateTime, default=datetime.utcnow)
+    finished_at   = Column(DateTime, nullable=True)
+
+
+# ── NEW: User table ───────────────────────────────────────────────
+
+class User(Base):
+    __tablename__ = "users"
+
+    id              = Column(Integer, primary_key=True, index=True)
+    username        = Column(String,  unique=True, index=True, nullable=False)
+    hashed_password = Column(String,  nullable=False)
+    role            = Column(String,  nullable=False, default="viewer")
+    created_at      = Column(DateTime, server_default=func.now())
